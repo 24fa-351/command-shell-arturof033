@@ -10,8 +10,8 @@
 
 int main(int argc, char* argv[]){
 
-    
+    printf("Assembling of project sections in progress.\n");
 
-
+    return 0;
 
 }
