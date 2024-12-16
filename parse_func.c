@@ -1,9 +1,86 @@
-#include "redir_func.h"
+#include "parse_func.h"
+#include <stdio.h>
+
+void evaluate_input(char *line_input){
+
+    char* words[MAX_CMD_INPUT];
+    int number_of_words = 0;
+    char absolue_path[1000];
+
+    // "wc -l" -> "/usr/bin/wc"
+    // "wc -l" -> "wc" "-l"
+    break_into_words(line_input, words, &number_of_words, ' ');
+
+    // accounts for number of arguments + NULL
+    int number_of_arguments = number_of_words - 1;
+    char *arguments[number_of_arguments];
+    isolate_arguments_in(words, number_of_words, arguments);
+
+    if(find_absolute_path(words[1], absolue_path) == false){
+        printf("Could not find %s\n", words[1]);
+        exit(0);
+    }
+
+    int fd_in;
+    int fd_out;
+
+    if(find_file_directories(&fd_in, 
+                            &fd_out, 
+                            words, 
+                            number_of_words) == false){
+
+        exit(0);
+
+    }
+
+
+    int pid = fork();
+    if (pid == 0) {
+        
+        dup2(fd_in, STDIN_FILENO); 
+        dup2(fd_out, STDOUT_FILENO);
+
+        execve(absolue_path, arguments, NULL);
+        printf("execve failed\n");
+       
+    }
+    else if(pid != 0){
+
+        int status;
+        pid_t child_pid = waitpid(pid, &status, 0);
+
+        if (child_pid == -1) {
+            perror("waitpid");
+            exit(1);
+        }
+
+        wait(NULL);
+        close(fd_in);
+        close(fd_out);
+
+        printf("pid is %d. forked %d. "
+           "Parent exiting\n",
+             getpid(), child_pid);
+
+    }
+    else {
+        perror("Fork failed");
+        exit(1);
+    }
+    
+}
+
+
+
+
+
+
+
 
 void add_char_to_word(char* word, char c){
     int len = strlen(word);
     word[len] = c;
-    word[len + 1] = '\0';
+    word[len + 1] = '\0'; 
 }
 
 void break_into_words(char* input, char* words[], int *number_of_elems, char break_on){
@@ -40,8 +117,6 @@ bool find_absolute_path(char *no_path, char* with_path){
 
     char *directories[MAX_DIR_LENGTH];
     int number_of_directories = 0;
-
-    printf("we're are looking for %s \n", no_path);
 
     break_into_words(getenv("PATH"), directories, &number_of_directories, ':');
     
@@ -81,14 +156,14 @@ bool find_file_directories(int *input_source, int *output_source, char *words[],
         }
 
     }
-    if (*words[2] == '-'){
+    if (*words[word_count - 1] == '-'){
 
         *output_source = STDOUT_FILENO;
 
     }
     else{
         
-        *output_source = open(words[2], O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        *output_source = open(words[word_count - 1], O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
         if (*output_source == -1) {
             fprintf(stderr, "Failed to open %s\n", words[2]);
             return false;
@@ -99,6 +174,23 @@ bool find_file_directories(int *input_source, int *output_source, char *words[],
     return true;
 
 }
+
+void isolate_arguments_in(char *words[], int number_of_words, char *arguments[]){
+
+    for(int ix = 1; ix < number_of_words; ix++){
+
+        // terminating index
+        if(ix == number_of_words - 1){
+            arguments[ix - 1] = NULL;
+            break;
+        }
+
+        arguments[ix - 1] = words[ix];
+
+    }
+
+}
+
 
 void print_char(char *char_arr[], int arr_len){
     
